@@ -1,102 +1,171 @@
 #include "ima.h"
-#include <limits.h>
-#include <stdlib.h>
-#include <math.h>
 
-// Define constants
-#define MAX_COLOR_DISTANCE 765
-#define N_SITES 256
+#define INSPIREPAR "RPFELGUEIRAS"
+#define CREATOR "JJ"
+#define RGB_COMPONENT_COLOR 255
 
-// Define a structure to hold the Voronoi site data
-typedef struct {
-    GLubyte valvR;
-    GLubyte valvG;
-    GLubyte valvB;
-    int position;
-} Vono;
+int decompression(char *filename, Image *img);
+int imageLoad_PPM(char *filename, Image *img);
+void imagesave_PPM(char *filename, Image *img);
+void imagesave_VONO(char *filename, Vono *vono, Image *img);
 
-// Function to compute square of color difference
-double sq2Color(double x, double y, double z) {
-  return x * x + y * y + z * z;
-}
+int decompression(char *filename, Image *img) {
+    FILE *fp;
+    int i, j, l = 0, size;
+    GLubyte *imR, *imG, *imB;
 
-// Function to generate Voronoi sites
-void generateVoronoiSites(Vono* vono, Image* i, int size, FILE* fp) {
-  int offset;
-  GLubyte * imR, * imG, * imB;
-  for(int k=0; k<N_SITES; k++){
-    offset = (rand() % (size/3))*3;
-    imR = i->data;
-    imG = i->data +1;
-    imB = i->data +2;
+    fp = fopen(filename, "rb");
 
-    vono[k].valvR = *(imR + offset);
-    vono[k].valvG = *(imG + offset);
-    vono[k].valvB = *(imB + offset);
-    vono[k].position = offset;
-    fprintf(fp, "%x %x %x\n", vono[k].valvR, vono[k].valvG, vono[k].valvB);
-  }
-}
+    Vono vono[N_SITES];
+    int index;
 
-// Function to find the closest Voronoi site for each pixel
-void findClosestVoronoiSite(Vono* vono, Image* i, int size, FILE* fp) {
-  int closestDis, rDis, gDis, bDis, dis;
-  short closest;
-  GLubyte * imR, * imG, * imB;
-  for (int j = 0; j < size  / 3 ; j ++) {
-    closestDis = MAX_COLOR_DISTANCE;
-    imR = i->data;
-    imG = i->data +1;
-    imB = i->data +2;
+    /* allocation memoire */
+    size = img->sizeX * img->sizeY * 3;
+    printf("Size image %lu %lu => %d\n", img->sizeX, img->sizeY, size);
+    img->data = (GLubyte *) malloc((size_t) size * 2 * sizeof(GLubyte));
+    assert(img->data);
 
-    for(int l=0; l<N_SITES; l++){
-      rDis = abs((*imR) - vono[l].valvR);
-      gDis = abs((*imG) - vono[l].valvG);
-      bDis = abs((*imB) - vono[l].valvB);
-      dis = (int) sq2Color(rDis, gDis, bDis);
-
-      if(closestDis > dis) {
-        closest = l;
-        closestDis = dis;
-      }
+    for (i = 0; i < N_SITES; i++) {
+        fscanf(fp, "%x %x %x\n", &vono[i].valvR, &vono[i].valvG, &vono[i].valvB);
     }
 
-    fwrite(&closest, (size_t) 1, (size_t) 1, fp);
-    *imR = vono[closest].valvR;
-    *imG = vono[closest].valvG;
-    *imB = vono[closest].valvB;
+    imR = img->data;
+    imG = img->data + 1;
+    imB = img->data + 2;
 
-    imR += 3;
-    imG += 3;
-    imB += 3;
-  }
+    //fill the image
+    for (j = 0; j < size / 3; j++) {
+        fread(&index, (size_t) 1, (size_t) 1, fp);
+
+        *imR = vono[index].valvR;
+        imR += 3;
+        *imG = vono[index].valvG;
+        imG += 3;
+        *imB = vono[index].valvB;
+        imB += 3;
+    }
+
+    fclose(fp);
+    return 1;
 }
 
-// Main function
-void gris_uniforme(Image * i) {
-  char s[256];
-  printf("Enter the name for the compressed file\n");
-  scanf("%s", &s[0]);
+int imageLoad_PPM(char *filename, Image *img) {
+    char d, buff[16];
+    FILE *fp;
+    int b, c, rgb_comp_color, size, sizex, sizey;
+    GLubyte tmp, *ptrdeb, *ptrfin, *lastline;
 
-  FILE *fp;
-  fp = fopen(s, "wb");
-  if (!fp) {
-    fprintf(stderr, "Unable to open file '%s'\n", s);
-    exit(1);
-  }
-  int size = 3 * i->sizeY * i->sizeX;
-  srand(time(NULL));
+    fp = fopen(filename, "rb");
+    if (!fp) {
+        fprintf(stderr, "Unable to open file '%s'\n", filename);
+        exit(1);
+    }
 
-  // Create an array to hold the Voronoi sites
-  Vono vono[N_SITES];
+    if (!fgets(buff, sizeof(buff), fp)) {
+        perror(filename);
+        exit(1);
+    }
 
-  // Generate the Voronoi sites
-  generateVoronoiSites(vono, i, size, fp);
+    if (buff[0] != 'P' || buff[1] != '6') {
+        fprintf(stderr, "Invalid image format (must be 'P6')\n");
+        exit(1);
+    }
 
-  // Find the closest Voronoi site for each pixel
-  findClosestVoronoiSite(vono, i, size, fp);
+    c = getc(fp);
+    while (c == '#') {
+        while (getc(fp) != '\n')
+            ;
+        c = getc(fp);
+    }
+    ungetc(c, fp);
 
-  printf("done\n");
-  fclose(fp);
+    if (fscanf(fp, "%lu %lu", &img->sizeX, &img->sizeY) != 2) {
+        fprintf(stderr, "Invalid image size (error loading '%s')\n", filename);
+        exit(1);
+    }
+
+    if (fscanf(fp, "%d", &rgb_comp_color) != 1) {
+        fprintf(stderr, "Invalid rgb component (error loading '%s')\n", filename);
+        exit(1);
+    }
+    fscanf(fp, "%c ", &d);
+
+    if (rgb_comp_color != RGB_COMPONENT_COLOR) {
+        fprintf(stderr, "'%s' does not have 8-bits components\n", filename);
+        exit(1);
+    }
+
+    /* allocation memoire */
+    size = img->sizeX * img->sizeY * 3;
+    printf("Size image %lu %lu => %d\n", img->sizeX, img->sizeY, size);
+    img->data = (GLubyte *) malloc((size_t) size * sizeof(GLubyte));
+    assert(img->data);
+
+    if (fread(img->data, (size_t) 1, (size_t) size, fp) == 0) {
+        fprintf(stderr, "Error loading image '%s'\n", filename);
+    }
+
+    sizex = img->sizeX;
+    sizey = img->sizeY;
+    lastline = img->data + size - sizex * 3;
+
+    for (b = 0; b < img->sizeY / 2; b++) {
+        ptrdeb = img->data + b * sizex * 3;
+        ptrfin = lastline - (b * sizex * 3);
+        for (c = 0; c < 3 * sizex; c++) {
+            tmp = *ptrdeb;
+            *ptrdeb = *ptrfin;
+            *ptrfin = tmp;
+            ptrfin++;
+            ptrdeb++;
+        }
+    }
+
+    int red, green, blue, alpha;
+    unsigned int pixel = *img->data;
+    blue = (pixel >> 16) & 0xff;
+    green = (pixel >> 8) & 0xff;
+    red = pixel & 0xff;
+    printf("red %d green %d blue %d  \n", red, green, blue);
+    printf("%ld => %ld\n %u \n", (int) img->data, (int) lastline, pixel);
+
+    fclose(fp);
+    return 1;
 }
 
+void imagesave_PPM(char *filename, Image *img) {
+    FILE *fp;
+    fp = fopen(filename, "wb");
+    if (!fp) {
+        fprintf(stderr, "Unable to open file '%s'\n", filename);
+        exit(1);
+    }
+
+    fprintf(fp, "P6\n");
+    fprintf(fp, "# Created by %s\n", CREATOR);
+    fprintf(fp, "%lu %lu\n", img->sizeX, img->sizeY);
+    fprintf(fp, "%d\n", RGB_COMPONENT_COLOR);
+    fwrite(img->data, (size_t) 1, (size_t) (3 * img->sizeX * img->sizeY), fp);
+    fclose(fp);
+}
+
+void imagesave_VONO(char *filename, Vono *vono, Image *img) {
+    FILE *fp;
+    fp = fopen(filename, "wb");
+    if (!fp) {
+        fprintf(stderr, "Unable to open file '%s'\n", filename);
+        exit(1);
+    }
+
+    fprintf(fp, "V6\n");
+    fprintf(fp, "# Created by %s\n", CREATOR);
+    fprintf(fp, "%lu %lu\n", img->sizeX, img->sizeY);
+    fprintf(fp, "%d\n", RGB_COMPONENT_COLOR);
+
+    for (int k = 0; k < N_SITES; k++) {
+        printf("Vr %d Vg %d Vb %d pos %d  \n", vono[k].valvR, vono[k].valvG, vono[k].valvB, vono[k].position);
+    }
+
+    fwrite(&vono[0], 1, sizeof(&vono) * N_SITES, fp);
+    fclose(fp);
+}
