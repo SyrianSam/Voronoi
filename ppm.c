@@ -1,7 +1,7 @@
 #include "ima.h"
 
-#define INSPIREPAR "RPFELGUEIRAS"
-#define CREATOR "JJ"
+#define INSPIREPAR "JJ BOURDIN"
+#define CREATOR "SyrianSam"
 #define RGB_COMPONENT_COLOR 255
 
 int decompression(char *filename, Image *img);
