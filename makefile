@@ -2,12 +2,7 @@
 #  Auteur : Fares BELHADJ
 #  Email  : amsi@ai.univ-paris8.fr
 #  Date   : 23/02/2006
-
-#  Modificiation : Mehdi Aghayani
-#  Email  : mehdi.aghayani@gmail.com
-#  Commentaire : modifié afin de fonctionner avec OpenGL et MacOS X et libpng
-#  
-#  Université Paris VIII
+#  UniversitÃ© Paris VIII
 
 SHELL = /bin/sh
 #definition des commandes utilisees
