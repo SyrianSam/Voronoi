@@ -1,9 +1,8 @@
 #include <unistd.h>     
 #include <math.h>
-#include "ima.h"
-
 #include <GL/glut.h>
 #include <GL/glu.h>	
+#include "ima.h"
 
 Image *image;
 Vono *vono;
@@ -24,21 +23,25 @@ void Mouse(int button, int state, int x, int y) {
 
   switch(button){
   case GLUT_LEFT_BUTTON:
-    break;
   case GLUT_MIDDLE_BUTTON:
-    break;
   case GLUT_RIGHT_BUTTON:
     break;    
   }
   glutPostRedisplay();
 }
 
+void InitializeGL() {
+  glClearColor(0.0, 0.0, 0.0, 0.0);
+  glShadeModel(GL_FLAT);
+  glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+}
+
+void InitializeWindow(int sizeX, int sizeY) {
+  glutReshapeWindow(sizeX, sizeY);
+}
+
 int Init(char *s) {
-
-
   image = (Image *) malloc(sizeof(Image));
-
-
   vono = (Vono *) malloc(sizeof(Vono)*N_SITES);
   if (image == NULL) {
     fprintf(stderr, "Out of memory\n");
@@ -48,20 +51,16 @@ int Init(char *s) {
 	return(-1);
   printf("tailles %d %d\n",(int) image->sizeX, (int) image->sizeY);
 
-  glClearColor(0.0, 0.0, 0.0, 0.0);
-  glShadeModel(GL_FLAT);
-  glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-  glutReshapeWindow(image->sizeX, image->sizeY);
-  
+  InitializeGL();
+  InitializeWindow(image->sizeX, image->sizeY);
+
   return (0);
 }
-int ReInit() {
 
-  glClearColor(0.0, 0.0, 0.0, 0.0);
-  glShadeModel(GL_FLAT);
-  glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-  glutReshapeWindow(image->sizeX, image->sizeY);
-  
+int ReInit() {
+  InitializeGL();
+  InitializeWindow(image->sizeX, image->sizeY);
+
   return (0);
 }
 
@@ -94,15 +93,15 @@ void menuFunc(int item) {
 
   switch(item){
   case 0:
-   printf("the image will be compressed and stored in a file\n");
-  gris_uniforme(image);  // compression function
-  Display();
-   break;
+    printf("the image will be compressed and stored in a file\n");
+    gris_uniforme(image);  // compression function
+    Display();
+    break;
   case 1:
-   printf("Please enter the name of a compressed image file \n");
+    printf("Please enter the name of a compressed image file \n");
     scanf("%s" , &s[0]);
     decompression(s, image);  //decompression function
-   Display();
+    Display();
     break;
   case 2:
   case 3:
@@ -120,21 +119,22 @@ void menuFunc(int item) {
   }
 }
 
-int main(int argc, char **argv) {  
-
-  if (argc<2) {
-    fprintf(stderr, "Usage : palette nom_de_fichier\n");
-    exit(0);
-  }
-
-  glutInit(&argc, argv); 
+void InitGLUT(int *argc, char **argv) {
+  glutInit(argc, argv); 
   glutInitDisplayMode(GLUT_RGB | GLUT_SINGLE);
   glutInitWindowSize(640,480);  
   glutInitWindowPosition(100, 100);  
   glutCreateWindow("VPUP8");  
+}
 
-  Init(argv[1]);
+void SetupGLUTCallbacks() {
+  glutDisplayFunc(Display);  
+  glutReshapeFunc(Reshape);
+  glutKeyboardFunc(Keyboard);
+  glutMouseFunc(Mouse);
+}
 
+void SetupGLUTMenu() {
   glutCreateMenu(menuFunc);
   glutAddMenuEntry("Quit", 0);
   glutAddMenuEntry("gris", 1);
@@ -144,13 +144,19 @@ int main(int argc, char **argv) {
   glutAddMenuEntry("Sauver", 5);
   glutAddMenuEntry("Informations", 6);
   glutAttachMenu(GLUT_LEFT_BUTTON);
+}
 
-  glutDisplayFunc(Display);  
-  glutReshapeFunc(Reshape);
-  glutKeyboardFunc(Keyboard);
-  
-  glutMouseFunc(Mouse);
+int main(int argc, char **argv) {  
 
+  if (argc<2) {
+    fprintf(stderr, "Usage : palette nom_de_fichier\n");
+    exit(0);
+  }
+
+  InitGLUT(&argc, argv);
+  Init(argv[1]);
+  SetupGLUTCallbacks();
+  SetupGLUTMenu();
   glutMainLoop();  
 
   return 1;
