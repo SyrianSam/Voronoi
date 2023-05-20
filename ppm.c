@@ -1,163 +1,102 @@
-#include <unistd.h>     
-#include <math.h>
-#include <GL/glut.h>
-#include <GL/glu.h>	
 #include "ima.h"
+#include <limits.h>
+#include <stdlib.h>
+#include <math.h>
 
-Image *image;
-Vono *vono;
+// Define constants
+#define MAX_COLOR_DISTANCE 765
+#define N_SITES 256
 
-#define ESCAPE 27
+// Define a structure to hold the Voronoi site data
+typedef struct {
+    GLubyte valvR;
+    GLubyte valvG;
+    GLubyte valvB;
+    int position;
+} Vono;
 
-void Keyboard(unsigned char key, int x, int y)  {
-  switch(key){
-  case ESCAPE :
-    exit(0);                   
-    break;
-  default:
-    fprintf(stderr, "Unused key\n");
+// Function to compute square of color difference
+double sq2Color(double x, double y, double z) {
+  return x * x + y * y + z * z;
+}
+
+// Function to generate Voronoi sites
+void generateVoronoiSites(Vono* vono, Image* i, int size, FILE* fp) {
+  int offset;
+  GLubyte * imR, * imG, * imB;
+  for(int k=0; k<N_SITES; k++){
+    offset = (rand() % (size/3))*3;
+    imR = i->data;
+    imG = i->data +1;
+    imB = i->data +2;
+
+    vono[k].valvR = *(imR + offset);
+    vono[k].valvG = *(imG + offset);
+    vono[k].valvB = *(imB + offset);
+    vono[k].position = offset;
+    fprintf(fp, "%x %x %x\n", vono[k].valvR, vono[k].valvG, vono[k].valvB);
   }
 }
 
-void Mouse(int button, int state, int x, int y) {
+// Function to find the closest Voronoi site for each pixel
+void findClosestVoronoiSite(Vono* vono, Image* i, int size, FILE* fp) {
+  int closestDis, rDis, gDis, bDis, dis;
+  short closest;
+  GLubyte * imR, * imG, * imB;
+  for (int j = 0; j < size  / 3 ; j ++) {
+    closestDis = MAX_COLOR_DISTANCE;
+    imR = i->data;
+    imG = i->data +1;
+    imB = i->data +2;
 
-  switch(button){
-  case GLUT_LEFT_BUTTON:
-  case GLUT_MIDDLE_BUTTON:
-  case GLUT_RIGHT_BUTTON:
-    break;    
+    for(int l=0; l<N_SITES; l++){
+      rDis = abs((*imR) - vono[l].valvR);
+      gDis = abs((*imG) - vono[l].valvG);
+      bDis = abs((*imB) - vono[l].valvB);
+      dis = (int) sq2Color(rDis, gDis, bDis);
+
+      if(closestDis > dis) {
+        closest = l;
+        closestDis = dis;
+      }
+    }
+
+    fwrite(&closest, (size_t) 1, (size_t) 1, fp);
+    *imR = vono[closest].valvR;
+    *imG = vono[closest].valvG;
+    *imB = vono[closest].valvB;
+
+    imR += 3;
+    imG += 3;
+    imB += 3;
   }
-  glutPostRedisplay();
 }
 
-void InitializeGL() {
-  glClearColor(0.0, 0.0, 0.0, 0.0);
-  glShadeModel(GL_FLAT);
-  glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-}
-
-void InitializeWindow(int sizeX, int sizeY) {
-  glutReshapeWindow(sizeX, sizeY);
-}
-
-int Init(char *s) {
-  image = (Image *) malloc(sizeof(Image));
-  vono = (Vono *) malloc(sizeof(Vono)*N_SITES);
-  if (image == NULL) {
-    fprintf(stderr, "Out of memory\n");
-    return(-1);
-  }
-  if (imageLoad_PPM(s, image)==-1) 
-	return(-1);
-  printf("tailles %d %d\n",(int) image->sizeX, (int) image->sizeY);
-
-  InitializeGL();
-  InitializeWindow(image->sizeX, image->sizeY);
-
-  return (0);
-}
-
-int ReInit() {
-  InitializeGL();
-  InitializeWindow(image->sizeX, image->sizeY);
-
-  return (0);
-}
-
-void Display(void) {
-  
-  GLint w, h;
-
-  glClear(GL_COLOR_BUFFER_BIT);
-
-  w = glutGet(GLUT_WINDOW_WIDTH);
-  h = glutGet(GLUT_WINDOW_HEIGHT);
-  glDrawPixels(image->sizeX, image->sizeY, GL_RGB, GL_UNSIGNED_BYTE, 
-	       image->data);
-
-  glFlush();
-}
-
-
-void Reshape(int w, int h) {
-  glViewport(0, 0, (GLsizei)w, (GLsizei) h);
-  glMatrixMode(GL_PROJECTION);
-  glLoadIdentity();
-  gluOrtho2D(0.0, (GLdouble) w, 0.0, (GLdouble)h);
-  glMatrixMode(GL_MODELVIEW);
-  glLoadIdentity();
-}
-
-void menuFunc(int item) {
+// Main function
+void gris_uniforme(Image * i) {
   char s[256];
+  printf("Enter the name for the compressed file\n");
+  scanf("%s", &s[0]);
 
-  switch(item){
-  case 0:
-    printf("the image will be compressed and stored in a file\n");
-    gris_uniforme(image);  // compression function
-    Display();
-    break;
-  case 1:
-    printf("Please enter the name of a compressed image file \n");
-    scanf("%s" , &s[0]);
-    decompression(s, image);  //decompression function
-    Display();
-    break;
-  case 2:
-  case 3:
-  case 4:
-  case 5:
-    printf("Enter the name for the image of this size\n");
-    scanf("%s", &s[0]);
-    imagesave_PPM(s, image);
-    break;
-  case 6:
-    printf("Image size: %ld %ld\n", (int) image->sizeX, (int) image->sizeY);
-    break;
-  default:
-    break;
+  FILE *fp;
+  fp = fopen(s, "wb");
+  if (!fp) {
+    fprintf(stderr, "Unable to open file '%s'\n", s);
+    exit(1);
   }
+  int size = 3 * i->sizeY * i->sizeX;
+  srand(time(NULL));
+
+  // Create an array to hold the Voronoi sites
+  Vono vono[N_SITES];
+
+  // Generate the Voronoi sites
+  generateVoronoiSites(vono, i, size, fp);
+
+  // Find the closest Voronoi site for each pixel
+  findClosestVoronoiSite(vono, i, size, fp);
+
+  printf("done\n");
+  fclose(fp);
 }
 
-void InitGLUT(int *argc, char **argv) {
-  glutInit(argc, argv); 
-  glutInitDisplayMode(GLUT_RGB | GLUT_SINGLE);
-  glutInitWindowSize(640,480);  
-  glutInitWindowPosition(100, 100);  
-  glutCreateWindow("VPUP8");  
-}
-
-void SetupGLUTCallbacks() {
-  glutDisplayFunc(Display);  
-  glutReshapeFunc(Reshape);
-  glutKeyboardFunc(Keyboard);
-  glutMouseFunc(Mouse);
-}
-
-void SetupGLUTMenu() {
-  glutCreateMenu(menuFunc);
-  glutAddMenuEntry("Quit", 0);
-  glutAddMenuEntry("gris", 1);
-  glutAddMenuEntry("Gris", 2);
-  glutAddMenuEntry("GRIS", 3);
-  glutAddMenuEntry("grey", 4);
-  glutAddMenuEntry("Save", 5);
-  glutAddMenuEntry("Information", 6);
-  glutAttachMenu(GLUT_LEFT_BUTTON);
-}
-
-int main(int argc, char **argv) {  
-
-  if (argc<2) {
-    fprintf(stderr, "Usage : palette file_name\n");
-    exit(0);
-  }
-
-  InitGLUT(&argc, argv);
-  Init(argv[1]);
-  SetupGLUTCallbacks();
-  SetupGLUTMenu();
-  glutMainLoop();  
-
-  return 1;
-}
